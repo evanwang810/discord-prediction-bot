@@ -4,14 +4,8 @@ from discord.ext import commands
 from datetime import datetime, timezone
 
 from db import connect
-from config import DEFAULT_CURRENCY, DEFAULT_BALANCE, DEFAULT_SUBSIDY, OWNER_ID
-
-
-def is_admin_or_owner(interaction: discord.Interaction) -> bool:
-    if interaction.user.id == OWNER_ID:
-        return True
-    perms = getattr(interaction.user, "guild_permissions", None)
-    return bool(perms and perms.administrator)
+from config import DEFAULT_CURRENCY, DEFAULT_BALANCE, DEFAULT_SUBSIDY
+from permissions import is_admin_or_owner
 
 
 class SetupCog(commands.Cog):

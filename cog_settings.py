@@ -6,14 +6,7 @@ from typing import Literal, Optional
 
 from db import connect
 from market import subsidy_to_b, SHARE_PAYOUT
-from config import OWNER_ID
-
-
-def is_admin_or_owner(interaction: discord.Interaction) -> bool:
-    if interaction.user.id == OWNER_ID:
-        return True
-    perms = getattr(interaction.user, "guild_permissions", None)
-    return bool(perms and perms.administrator)
+from permissions import is_admin_or_owner
 
 
 async def _server_exists(guild_id: int) -> bool:
