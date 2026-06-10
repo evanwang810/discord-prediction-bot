@@ -1,9 +1,11 @@
+import asyncio
 import discord
 from discord.ext import commands
 
 from config import TOKEN
 from db import init_db
 from inflation import inflation_loop
+from snapshots import snapshot_loop
 
 COGS = ["cog_setup", "cog_accounts", "cog_markets", "cog_trade", "cog_settings", "cog_info"]
 
@@ -19,7 +21,10 @@ class PredictionBot(commands.Bot):
         for ext in COGS:
             await self.load_extension(ext)
         await self.tree.sync()
-        self.loop.create_task(inflation_loop(self))
+        self._bg_tasks = [
+            asyncio.create_task(inflation_loop(self)),
+            asyncio.create_task(snapshot_loop(self)),
+        ]
 
     async def on_ready(self):
         print(f"Logged in as {self.user} ({self.user.id})")

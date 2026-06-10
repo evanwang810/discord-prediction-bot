@@ -76,6 +76,74 @@ class AccountsCog(commands.Cog):
                     return
         await interaction.response.send_modal(CreateModal())
 
+    @app_commands.command(name="transfer", description="Send currency to another user.")
+    @app_commands.describe(user="Recipient", amount="How much to send")
+    @app_commands.guild_only()
+    async def transfer(
+        self,
+        interaction: discord.Interaction,
+        user: discord.Member,
+        amount: app_commands.Range[int, 1, 1_000_000_000],
+    ):
+        gid, uid = interaction.guild_id, interaction.user.id
+        if user.id == uid:
+            await interaction.response.send_message(
+                "You can't transfer to yourself.", ephemeral=True
+            )
+            return
+        if user.bot:
+            await interaction.response.send_message(
+                "Bots don't have accounts.", ephemeral=True
+            )
+            return
+        async with connect() as db:
+            async with db.execute(
+                "SELECT a.balance, s.currency_name FROM accounts a "
+                "JOIN servers s ON a.guild_id = s.guild_id "
+                "WHERE a.guild_id = ? AND a.user_id = ?",
+                (gid, uid),
+            ) as cur:
+                sender = await cur.fetchone()
+            if not sender:
+                await interaction.response.send_message(
+                    "You don't have an account. Run `/create` first.", ephemeral=True
+                )
+                return
+            if sender["balance"] < amount:
+                await interaction.response.send_message(
+                    f"Insufficient balance. You have {sender['balance']} "
+                    f"{sender['currency_name']}.",
+                    ephemeral=True,
+                )
+                return
+            async with db.execute(
+                "SELECT 1 FROM accounts WHERE guild_id = ? AND user_id = ?",
+                (gid, user.id),
+            ) as cur:
+                if not await cur.fetchone():
+                    await interaction.response.send_message(
+                        f"{user.mention} doesn't have an account here.", ephemeral=True
+                    )
+                    return
+            await db.execute(
+                "UPDATE accounts SET balance = balance - ? WHERE guild_id = ? AND user_id = ?",
+                (amount, gid, uid),
+            )
+            await db.execute(
+                "UPDATE accounts SET balance = balance + ? WHERE guild_id = ? AND user_id = ?",
+                (amount, gid, user.id),
+            )
+            await db.execute(
+                "INSERT INTO transfers (guild_id, from_user, to_user, amount, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (gid, uid, user.id, amount, datetime.now(timezone.utc).isoformat()),
+            )
+            await db.commit()
+        await interaction.response.send_message(
+            f"Sent **{amount} {sender['currency_name']}** to {user.mention}.",
+            ephemeral=True,
+        )
+
 
 async def setup(bot):
     await bot.add_cog(AccountsCog(bot))

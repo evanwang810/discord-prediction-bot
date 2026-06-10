@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS servers (
     inflation_amount INTEGER NOT NULL DEFAULT 0,
     inflation_days INTEGER NOT NULL DEFAULT 7,
     initial_subsidy INTEGER NOT NULL DEFAULT 5000,
+    tax_percent REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -59,15 +60,37 @@ CREATE TABLE IF NOT EXISTS trades (
     shares REAL NOT NULL,
     cost INTEGER NOT NULL,
     price_at_trade REAL,
+    price_after REAL,
+    tax_paid INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transfers (
+    transfer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    from_user INTEGER NOT NULL,
+    to_user INTEGER NOT NULL,
+    amount INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS snapshots (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    snap_date TEXT NOT NULL,
+    net_worth REAL NOT NULL,
+    PRIMARY KEY (guild_id, user_id, snap_date)
 );
 """
 
 # ALTER TABLE migrations for users who had an earlier version of the schema.
 _ADDS = [
     ("servers", "initial_subsidy", "INTEGER NOT NULL DEFAULT 5000"),
+    ("servers", "tax_percent", "REAL NOT NULL DEFAULT 0"),
     ("accounts", "last_trade_at", "TEXT"),
     ("trades", "price_at_trade", "REAL"),
+    ("trades", "price_after", "REAL"),
+    ("trades", "tax_paid", "INTEGER NOT NULL DEFAULT 0"),
     ("markets", "subsidy", "INTEGER NOT NULL DEFAULT 0"),
 ]
 

@@ -56,6 +56,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             f"- Currency: `{s['currency_name']}`\n"
             f"- Starting balance: `{s['starting_balance']}`\n"
             f"- Initial market subsidy: `{s['initial_subsidy']}`\n"
+            f"- Transaction tax: `{s['tax_percent']}%`\n"
             f"- Inflation: {infl}\n"
             f"- Share payout (fixed): `{SHARE_PAYOUT} {s['currency_name']}` per winning share\n"
             f"- Open markets: `{open_n}`",
@@ -109,6 +110,25 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             f"(prices move less per trade).",
             ephemeral=True,
         )
+
+    @app_commands.command(name="tax", description="Set the transaction tax on trades (percent, 0 disables).")
+    @app_commands.guild_only()
+    async def tax(self, interaction: discord.Interaction,
+                  percent: app_commands.Range[float, 0, 50]):
+        if not await self._guard(interaction):
+            return
+        async with connect() as db:
+            await db.execute(
+                "UPDATE servers SET tax_percent = ? WHERE guild_id = ?",
+                (percent, interaction.guild_id),
+            )
+            await db.commit()
+        msg = (
+            "Transaction tax disabled."
+            if percent == 0
+            else f"Transaction tax set to `{percent}%` of each trade."
+        )
+        await interaction.response.send_message(msg, ephemeral=True)
 
     @app_commands.command(name="inflation", description="Set automatic credit inflation. Amount=0 disables it.")
     @app_commands.guild_only()

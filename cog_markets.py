@@ -1,8 +1,10 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from datetime import datetime
 
 from db import connect
+from charts import odds_chart, portfolio_chart
 from market import prices, price_credits, SHARE_PAYOUT
 
 
@@ -40,10 +42,53 @@ class MarketsCog(commands.Cog):
             )
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
+    @app_commands.command(name="odds", description="Graph of a market's odds over time.")
+    @app_commands.describe(market_id="ID of the market (see /markets)")
+    @app_commands.guild_only()
+    async def odds(self, interaction: discord.Interaction, market_id: int):
+        gid = interaction.guild_id
+        await interaction.response.defer(ephemeral=True)
+        async with connect() as db:
+            async with db.execute(
+                "SELECT question, status, created_at, yes_shares, no_shares, liquidity "
+                "FROM markets WHERE guild_id = ? AND market_id = ?",
+                (gid, market_id),
+            ) as cur:
+                m = await cur.fetchone()
+            if not m:
+                await interaction.followup.send("Market not found.", ephemeral=True)
+                return
+            async with db.execute(
+                "SELECT created_at, price_after FROM trades "
+                "WHERE guild_id = ? AND market_id = ? AND price_after IS NOT NULL "
+                "ORDER BY trade_id",
+                (gid, market_id),
+            ) as cur:
+                rows = await cur.fetchall()
+
+        times = [datetime.fromisoformat(m["created_at"])]
+        probs = [0.5]
+        for r in rows:
+            times.append(datetime.fromisoformat(r["created_at"]))
+            probs.append(r["price_after"])
+        if m["status"] == "open":
+            py, _ = prices(m["yes_shares"], m["no_shares"], m["liquidity"])
+            times.append(datetime.now(times[0].tzinfo))
+            probs.append(py)
+
+        buf = odds_chart(times, probs, m["question"])
+        await interaction.followup.send(
+            f"`#{market_id}` {m['question']} — **{len(rows)}** trade(s), "
+            f"currently `{probs[-1]*100:.1f}%` YES",
+            file=discord.File(buf, filename=f"odds_{market_id}.png"),
+            ephemeral=True,
+        )
+
     @app_commands.command(name="portfolio", description="See your balance, positions and stats.")
     @app_commands.guild_only()
     async def portfolio(self, interaction: discord.Interaction):
         gid, uid = interaction.guild_id, interaction.user.id
+        await interaction.response.defer(ephemeral=True)
         async with connect() as db:
             async with db.execute(
                 "SELECT a.balance, a.username, s.currency_name "
@@ -53,7 +98,7 @@ class MarketsCog(commands.Cog):
             ) as cur:
                 acc = await cur.fetchone()
             if not acc:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     "You don't have an account. Run `/create` first.", ephemeral=True
                 )
                 return
@@ -71,12 +116,20 @@ class MarketsCog(commands.Cog):
             async with db.execute(
                 "SELECT "
                 "COUNT(*) FILTER (WHERE m.outcome = t.outcome) AS wins, "
-                "COUNT(*) FILTER (WHERE m.status = 'resolved') AS total "
+                "COUNT(*) FILTER (WHERE m.status = 'resolved') AS total, "
+                "COUNT(*) AS all_trades, "
+                "COUNT(*) FILTER (WHERE t.created_at >= datetime('now', '-7 days')) AS recent "
                 "FROM trades t JOIN markets m ON t.market_id = m.market_id "
                 "WHERE t.guild_id = ? AND t.user_id = ?",
                 (gid, uid),
             ) as cur:
                 stats = await cur.fetchone()
+            async with db.execute(
+                "SELECT snap_date, net_worth FROM snapshots "
+                "WHERE guild_id = ? AND user_id = ? ORDER BY snap_date",
+                (gid, uid),
+            ) as cur:
+                snaps = await cur.fetchall()
 
         cur_name = acc["currency_name"]
         net = float(acc["balance"])
@@ -106,13 +159,29 @@ class MarketsCog(commands.Cog):
             f"**{acc['username']}**",
             f"Balance: **{acc['balance']} {cur_name}**",
             f"Net worth (incl. open positions at market price): **{net:.0f} {cur_name}**",
+            f"Total trades: **{stats['all_trades'] or 0}** "
+            f"({stats['recent'] or 0} in the last 7 days)",
             f"Win rate on resolved trades: **{wr}**",
         ]
         if pos_lines:
             lines.append("")
             lines.append("**Positions:**")
             lines.extend(pos_lines)
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+        file = None
+        if len(snaps) >= 2:
+            dates = [datetime.fromisoformat(s["snap_date"]) for s in snaps]
+            worths = [s["net_worth"] for s in snaps]
+            buf = portfolio_chart(dates, worths, acc["username"], cur_name)
+            file = discord.File(buf, filename="portfolio.png")
+        else:
+            lines.append("")
+            lines.append("*Net worth graph appears after a couple of daily snapshots.*")
+
+        if file:
+            await interaction.followup.send("\n".join(lines), file=file, ephemeral=True)
+        else:
+            await interaction.followup.send("\n".join(lines), ephemeral=True)
 
 
 async def setup(bot):

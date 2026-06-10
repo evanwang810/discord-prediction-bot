@@ -9,6 +9,9 @@ A small Discord bot that runs binary (YES/NO) prediction markets inside a server
 - Configurable per-server: currency name, starting balance, market liquidity, auto-inflation
 - Accounts linked to Discord identity (no re-auth per trade)
 - Net-worth leaderboard with win-rate tracking
+- Odds-over-time graph per market (`/odds`) and daily net-worth graph per user (`/portfolio`)
+- Peer-to-peer transfers (`/transfer`)
+- Optional transaction tax on trades
 - 10-minute trade cooldown per user
 - All admin actions gated by Discord's administrator permission
 
@@ -23,8 +26,10 @@ Python 3.11+, [discord.py](https://github.com/Rapptz/discord.py) 2.x, SQLite via
 | `/setup` | admin | Initialize the bot on this server |
 | `/create` | anyone | Create an account |
 | `/markets` | anyone | List open markets |
+| `/odds` | anyone | Odds-over-time graph for a market |
 | `/trade` | anyone | Buy YES or NO shares |
-| `/portfolio` | anyone | See balance, positions, win rate |
+| `/transfer` | anyone | Send currency to another user |
+| `/portfolio` | anyone | Balance, positions, stats, net-worth graph |
 | `/leaderboard` | anyone | Top 10 by net worth |
 | `/info`, `/commands` | anyone | Bot / command info |
 | `/settings ...` | admin | Currency, balance, inflation, market lifecycle, grants |
@@ -36,7 +41,11 @@ main.py               bot entry point
 config.py             constants and env loading
 db.py                 SQLite schema and connection helpers
 market.py             LMSR math
+networth.py           net-worth valuation helper
+charts.py             matplotlib chart rendering
 inflation.py          background task for periodic credit grants
+snapshots.py          background task for daily net-worth snapshots
+permissions.py        admin/owner permission checks
 cog_setup.py          /setup
 cog_accounts.py       /create
 cog_markets.py        /markets, /portfolio

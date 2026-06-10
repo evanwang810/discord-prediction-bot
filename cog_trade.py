@@ -32,7 +32,7 @@ class TradeCog(commands.Cog):
 
         async with connect() as db:
             async with db.execute(
-                "SELECT a.balance, a.last_trade_at, s.currency_name "
+                "SELECT a.balance, a.last_trade_at, s.currency_name, s.tax_percent "
                 "FROM accounts a JOIN servers s ON a.guild_id = s.guild_id "
                 "WHERE a.guild_id = ? AND a.user_id = ?",
                 (gid, uid),
@@ -82,7 +82,16 @@ class TradeCog(commands.Cog):
             p_yes_before, p_no_before = prices(y, n, b)
             price_at = p_yes_before if outcome == "yes" else p_no_before
 
-            shares = shares_for_credits(y, n, b, outcome, float(amount))
+            tax = int(amount * acc["tax_percent"] / 100)
+            spend = amount - tax
+            if spend <= 0:
+                await interaction.response.send_message(
+                    "Amount is too small — the transaction tax would eat all of it.",
+                    ephemeral=True,
+                )
+                return
+
+            shares = shares_for_credits(y, n, b, outcome, float(spend))
             if shares <= 0:
                 await interaction.response.send_message(
                     "That amount can't buy any shares at the current price.", ephemeral=True
@@ -112,19 +121,22 @@ class TradeCog(commands.Cog):
                  shares if outcome == "yes" else 0.0,
                  shares if outcome == "no" else 0.0),
             )
+            p_yes_after, p_no_after = prices(new_y, new_n, b)
             await db.execute(
                 "INSERT INTO trades (guild_id, user_id, market_id, outcome, shares, cost, "
-                "price_at_trade, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (gid, uid, market_id, outcome, shares, amount, price_at, now_iso),
+                "price_at_trade, price_after, tax_paid, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (gid, uid, market_id, outcome, shares, amount, price_at,
+                 p_yes_after, tax, now_iso),
             )
             await db.commit()
-            p_yes_after, p_no_after = prices(new_y, new_n, b)
 
         cur_name = acc["currency_name"]
-        avg_price = amount / shares
+        avg_price = spend / shares
+        tax_line = f" (incl. **{tax} {cur_name}** tax)" if tax > 0 else ""
         await interaction.response.send_message(
             f"Bought **{shares:.2f}** {outcome.upper()} shares on `#{market_id}` for "
-            f"**{amount} {cur_name}** (avg `{avg_price:.2f} {cur_name}/share`).\n"
+            f"**{amount} {cur_name}**{tax_line} (avg `{avg_price:.2f} {cur_name}/share`).\n"
             f"Implied price before: YES `{p_yes_before*100:.1f}%` / NO `{p_no_before*100:.1f}%`\n"
             f"Implied price after:  YES `{p_yes_after*100:.1f}%` / NO `{p_no_after*100:.1f}%`\n"
             f"Each winning share pays **{SHARE_PAYOUT} {cur_name}** on resolution.",
