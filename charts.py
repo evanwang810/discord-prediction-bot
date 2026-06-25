@@ -1,11 +1,27 @@
-"""Matplotlib chart rendering. Returns PNG bytes ready for discord.File."""
+"""Matplotlib chart rendering. Returns PNG bytes ready for discord.File.
+
+matplotlib is imported lazily inside _plt() rather than at module load, so the
+~130 MB import cost is only paid the first time someone requests a chart. This
+keeps idle memory low enough for small hosts (e.g. bot-hosting.net's 256 MB
+free tier).
+"""
 import io
 from datetime import datetime
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+_plt_mod = None
+_mdates_mod = None
+
+
+def _plt():
+    global _plt_mod, _mdates_mod
+    if _plt_mod is None:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        _plt_mod, _mdates_mod = plt, mdates
+    return _plt_mod, _mdates_mod
+
 
 _STYLE = {
     "figure.facecolor": "#2b2d31",
@@ -19,7 +35,7 @@ _STYLE = {
 }
 
 
-def _render(fig) -> io.BytesIO:
+def _render(plt, fig) -> io.BytesIO:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
     plt.close(fig)
@@ -28,6 +44,7 @@ def _render(fig) -> io.BytesIO:
 
 
 def odds_chart(times: list[datetime], yes_probs: list[float], question: str) -> io.BytesIO:
+    plt, mdates = _plt()
     with plt.rc_context(_STYLE):
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(times, [p * 100 for p in yes_probs], color="#57f287", linewidth=2,
@@ -39,11 +56,12 @@ def odds_chart(times: list[datetime], yes_probs: list[float], question: str) -> 
         ax.grid(True, alpha=0.5)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d\n%H:%M"))
         fig.autofmt_xdate(rotation=0, ha="center")
-        return _render(fig)
+        return _render(plt, fig)
 
 
 def portfolio_chart(dates: list[datetime], worths: list[float],
                     username: str, currency: str) -> io.BytesIO:
+    plt, mdates = _plt()
     with plt.rc_context(_STYLE):
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.plot(dates, worths, color="#5865f2", linewidth=2, marker="o", markersize=4)
@@ -52,4 +70,4 @@ def portfolio_chart(dates: list[datetime], worths: list[float],
         ax.grid(True, alpha=0.5)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         fig.autofmt_xdate(rotation=0, ha="center")
-        return _render(fig)
+        return _render(plt, fig)
