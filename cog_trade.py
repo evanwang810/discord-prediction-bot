@@ -167,7 +167,7 @@ class TradeCog(commands.Cog):
         interaction: discord.Interaction,
         market_id: int,
         outcome: Literal["yes", "no"],
-        shares: Optional[app_commands.Range[float, 0.0001, 1_000_000_000]] = None,
+        shares: Optional[app_commands.Range[float, 0.0001, 1_000_000_000.0]] = None,
     ):
         gid, uid = interaction.guild_id, interaction.user.id
         now = datetime.now(timezone.utc)
