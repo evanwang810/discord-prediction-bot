@@ -29,6 +29,7 @@ COMMANDS_HELP = [
     ("/settings close_market", "Admin — stop trading on a market."),
     ("/settings resolve", "Admin — resolve a market and pay out winners."),
     ("/settings grant", "Admin — give or take credits from a user."),
+    ("/say", "Admin — make the bot post a message."),
 ]
 
 
