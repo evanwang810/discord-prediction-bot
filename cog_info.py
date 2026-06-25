@@ -12,7 +12,8 @@ COMMANDS_HELP = [
     ("/create", "Create your account with a starting balance."),
     ("/markets", "List open prediction markets."),
     ("/odds", "Graph of a market's odds over time."),
-    ("/trade", "Buy YES or NO shares on a market."),
+    ("/buy", "Buy YES or NO shares on a market."),
+    ("/sell", "Sell shares you hold back to the market."),
     ("/transfer", "Send currency to another user."),
     ("/portfolio", "Your balance, positions, stats and net-worth graph."),
     ("/leaderboard", "Top 10 traders by net worth."),
@@ -110,8 +111,8 @@ class InfoCog(commands.Cog):
                 positions = await cur.fetchall()
             async with db.execute(
                 "SELECT t.user_id, "
-                "COUNT(*) FILTER (WHERE m.outcome = t.outcome) AS wins, "
-                "COUNT(*) FILTER (WHERE m.status = 'resolved') AS total "
+                "COUNT(*) FILTER (WHERE m.outcome = t.outcome AND t.kind = 'buy') AS wins, "
+                "COUNT(*) FILTER (WHERE m.status = 'resolved' AND t.kind = 'buy') AS total "
                 "FROM trades t JOIN markets m ON t.market_id = m.market_id "
                 "WHERE t.guild_id = ? GROUP BY t.user_id",
                 (gid,),

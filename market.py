@@ -53,6 +53,21 @@ def shares_for_credits(y, n, b, side, credits):
         return m - n + b * math.log(inner)
 
 
+def credits_for_shares(y, n, b, side, shares):
+    """Credits refunded for selling `shares` of `side` back to the market maker.
+
+    Symmetric inverse of buying: the refund equals the drop in the LMSR cost
+    function caused by removing the shares, scaled to credits.
+    """
+    if shares <= 0:
+        return 0.0
+    if side == "yes":
+        refund_budget = lmsr_cost(y, n, b) - lmsr_cost(y - shares, n, b)
+    else:
+        refund_budget = lmsr_cost(y, n, b) - lmsr_cost(y, n - shares, b)
+    return max(0.0, refund_budget * SHARE_PAYOUT)
+
+
 def subsidy_to_b(subsidy):
     """Convert a credits subsidy into the LMSR liquidity parameter."""
     if subsidy <= 0:

@@ -27,7 +27,8 @@ Python 3.11+, [discord.py](https://github.com/Rapptz/discord.py) 2.x, SQLite via
 | `/create` | anyone | Create an account |
 | `/markets` | anyone | List open markets |
 | `/odds` | anyone | Odds-over-time graph for a market |
-| `/trade` | anyone | Buy YES or NO shares |
+| `/buy` | anyone | Buy YES or NO shares |
+| `/sell` | anyone | Sell shares back to the market |
 | `/transfer` | anyone | Send currency to another user |
 | `/portfolio` | anyone | Balance, positions, stats, net-worth graph |
 | `/leaderboard` | anyone | Top 10 by net worth |

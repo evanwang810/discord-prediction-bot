@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS trades (
     outcome TEXT NOT NULL,
     shares REAL NOT NULL,
     cost INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'buy',
     price_at_trade REAL,
     price_after REAL,
     tax_paid INTEGER NOT NULL DEFAULT 0,
@@ -91,6 +92,7 @@ _ADDS = [
     ("trades", "price_at_trade", "REAL"),
     ("trades", "price_after", "REAL"),
     ("trades", "tax_paid", "INTEGER NOT NULL DEFAULT 0"),
+    ("trades", "kind", "TEXT NOT NULL DEFAULT 'buy'"),
     ("markets", "subsidy", "INTEGER NOT NULL DEFAULT 0"),
 ]
 

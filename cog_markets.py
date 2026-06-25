@@ -114,8 +114,8 @@ class MarketsCog(commands.Cog):
                 positions = await cur.fetchall()
             async with db.execute(
                 "SELECT "
-                "COUNT(*) FILTER (WHERE m.outcome = t.outcome) AS wins, "
-                "COUNT(*) FILTER (WHERE m.status = 'resolved') AS total, "
+                "COUNT(*) FILTER (WHERE m.outcome = t.outcome AND t.kind = 'buy') AS wins, "
+                "COUNT(*) FILTER (WHERE m.status = 'resolved' AND t.kind = 'buy') AS total, "
                 "COUNT(*) AS all_trades, "
                 "COUNT(*) FILTER (WHERE t.created_at >= datetime('now', '-7 days')) AS recent "
                 "FROM trades t JOIN markets m ON t.market_id = m.market_id "
