@@ -135,12 +135,12 @@ class TradeCog(commands.Cog):
         avg_price = spend / shares
         tax_line = f" (incl. **{tax} {cur_name}** tax)" if tax > 0 else ""
         await interaction.response.send_message(
-            f"Bought **{shares:.2f}** {outcome.upper()} shares on `#{market_id}` for "
-            f"**{amount} {cur_name}**{tax_line} (avg `{avg_price:.2f} {cur_name}/share`).\n"
+            f"{interaction.user.mention} bought **{shares:.2f}** {outcome.upper()} shares on "
+            f"`#{market_id}` for **{amount} {cur_name}**{tax_line} "
+            f"(avg `{avg_price:.2f} {cur_name}/share`).\n"
             f"Implied price before: YES `{p_yes_before*100:.1f}%` / NO `{p_no_before*100:.1f}%`\n"
             f"Implied price after:  YES `{p_yes_after*100:.1f}%` / NO `{p_no_after*100:.1f}%`\n"
-            f"Each winning share pays **{SHARE_PAYOUT} {cur_name}** on resolution.",
-            ephemeral=True,
+            f"Each winning share pays **{SHARE_PAYOUT} {cur_name}** on resolution."
         )
 
 

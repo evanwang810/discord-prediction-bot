@@ -53,8 +53,8 @@ class CreateModal(discord.ui.Modal, title="Create Account"):
             )
             await db.commit()
         await interaction.response.send_message(
-            f"Account `{uname}` created with **{srv['starting_balance']} {srv['currency_name']}**.",
-            ephemeral=True,
+            f"{interaction.user.mention} joined as `{uname}` with "
+            f"**{srv['starting_balance']} {srv['currency_name']}**."
         )
 
 
@@ -140,8 +140,8 @@ class AccountsCog(commands.Cog):
             )
             await db.commit()
         await interaction.response.send_message(
-            f"Sent **{amount} {sender['currency_name']}** to {user.mention}.",
-            ephemeral=True,
+            f"{interaction.user.mention} sent **{amount} {sender['currency_name']}** "
+            f"to {user.mention}."
         )
 
 

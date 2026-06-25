@@ -41,7 +41,7 @@ class InfoCog(commands.Cog):
         lines = ["**Commands**"]
         for cmd, desc in COMMANDS_HELP:
             lines.append(f"`{cmd}` — {desc}")
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.response.send_message("\n".join(lines))
 
     @app_commands.command(name="info", description="Show bot and server info.")
     @app_commands.guild_only()
@@ -52,7 +52,7 @@ class InfoCog(commands.Cog):
                 s = await cur.fetchone()
             if not s:
                 await interaction.response.send_message(
-                    "Server isn't set up. Admin must run `/setup`.", ephemeral=True
+                    "Server isn't set up. Admin must run `/setup`."
                 )
                 return
             async with db.execute(
@@ -79,7 +79,6 @@ class InfoCog(commands.Cog):
             f"- Accounts: `{accounts}`\n"
             f"- Markets open / resolved: `{m['open_n']}` / `{m['res_n']}`\n\n"
             f"Run `/commands` for the full command list.",
-            ephemeral=True,
         )
 
     @app_commands.command(name="leaderboard", description="Top traders by net worth.")
@@ -93,7 +92,7 @@ class InfoCog(commands.Cog):
                 srv = await cur.fetchone()
             if not srv:
                 await interaction.response.send_message(
-                    "Server isn't set up.", ephemeral=True
+                    "Server isn't set up."
                 )
                 return
             async with db.execute(
@@ -120,7 +119,7 @@ class InfoCog(commands.Cog):
                 stats_rows = await cur.fetchall()
 
         if not accounts:
-            await interaction.response.send_message("No accounts yet.", ephemeral=True)
+            await interaction.response.send_message("No accounts yet.")
             return
 
         stats = {r["user_id"]: (r["wins"], r["total"]) for r in stats_rows}
@@ -150,7 +149,7 @@ class InfoCog(commands.Cog):
                 f"`{info['value']:.0f} {cur_name}` "
                 f"(balance {info['balance']}, win rate {wr})"
             )
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.response.send_message("\n".join(lines))
 
 
 async def setup(bot):

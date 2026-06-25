@@ -28,7 +28,7 @@ class MarketsCog(commands.Cog):
             ) as cur:
                 rows = await cur.fetchall()
         if not rows:
-            await interaction.response.send_message("No open markets.", ephemeral=True)
+            await interaction.response.send_message("No open markets.")
             return
         cur_name = srv["currency_name"] if srv else "credits"
         lines = [f"**Open markets** — winning shares pay **{SHARE_PAYOUT} {cur_name}** each"]
@@ -40,14 +40,14 @@ class MarketsCog(commands.Cog):
                 f"   YES `{y_c:.1f} {cur_name}` ({p_y*100:.1f}%)  /  "
                 f"NO `{n_c:.1f} {cur_name}` ({p_n*100:.1f}%)"
             )
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        await interaction.response.send_message("\n".join(lines))
 
     @app_commands.command(name="odds", description="Graph of a market's odds over time.")
     @app_commands.describe(market_id="ID of the market (see /markets)")
     @app_commands.guild_only()
     async def odds(self, interaction: discord.Interaction, market_id: int):
         gid = interaction.guild_id
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         async with connect() as db:
             async with db.execute(
                 "SELECT question, status, created_at, yes_shares, no_shares, liquidity "
@@ -56,7 +56,7 @@ class MarketsCog(commands.Cog):
             ) as cur:
                 m = await cur.fetchone()
             if not m:
-                await interaction.followup.send("Market not found.", ephemeral=True)
+                await interaction.followup.send("Market not found.")
                 return
             async with db.execute(
                 "SELECT created_at, price_after FROM trades "
@@ -81,7 +81,6 @@ class MarketsCog(commands.Cog):
             f"`#{market_id}` {m['question']} — **{len(rows)}** trade(s), "
             f"currently `{probs[-1]*100:.1f}%` YES",
             file=discord.File(buf, filename=f"odds_{market_id}.png"),
-            ephemeral=True,
         )
 
     @app_commands.command(name="portfolio", description="See your balance, positions and stats.")
