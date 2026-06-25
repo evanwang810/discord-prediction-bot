@@ -33,6 +33,12 @@ def price_credits(y, n, b):
     return py * SHARE_PAYOUT, pn * SHARE_PAYOUT
 
 
+def market_cap(y, n, b):
+    """Total current value of all outstanding shares, in credits."""
+    py, pn = prices(y, n, b)
+    return (y * py + n * pn) * SHARE_PAYOUT
+
+
 def shares_for_credits(y, n, b, side, credits):
     """How many `side` shares `credits` worth of currency buys at the current state."""
     if credits <= 0:

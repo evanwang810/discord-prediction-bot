@@ -8,14 +8,15 @@ from inflation import inflation_loop
 from snapshots import snapshot_loop
 
 COGS = ["cog_setup", "cog_accounts", "cog_markets", "cog_trade", "cog_settings",
-        "cog_info", "cog_say"]
+        "cog_info"]
 
 
 class PredictionBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.members = True
-        super().__init__(command_prefix="!", intents=intents)
+        intents.message_content = True  # required for ! prefix commands
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
 
     async def setup_hook(self):
         await init_db()

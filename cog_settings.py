@@ -57,6 +57,8 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             f"- Starting balance: `{s['starting_balance']}`\n"
             f"- Initial market subsidy: `{s['initial_subsidy']}`\n"
             f"- Transaction tax: `{s['tax_percent']}%`\n"
+            f"- Referrals: {'on' if s['referral_enabled'] else 'off'} "
+            f"(bonus `{s['referral_bonus']}`)\n"
             f"- Inflation: {infl}\n"
             f"- Share payout (fixed): `{SHARE_PAYOUT} {s['currency_name']}` per winning share\n"
             f"- Open markets: `{open_n}`",
@@ -128,6 +130,23 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             if percent == 0
             else f"Transaction tax set to `{percent}%` of each trade."
         )
+        await interaction.response.send_message(msg, ephemeral=True)
+
+    @app_commands.command(name="referral", description="Enable referral bonuses and set the amount.")
+    @app_commands.describe(enabled="Turn referral bonuses on or off",
+                           bonus="Credits the referrer earns per new signup")
+    @app_commands.guild_only()
+    async def referral(self, interaction: discord.Interaction, enabled: bool,
+                       bonus: app_commands.Range[int, 0, 1_000_000_000] = 500):
+        if not await self._guard(interaction):
+            return
+        async with connect() as db:
+            await db.execute(
+                "UPDATE servers SET referral_enabled = ?, referral_bonus = ? WHERE guild_id = ?",
+                (1 if enabled else 0, bonus, interaction.guild_id))
+            await db.commit()
+        msg = (f"Referrals **enabled** — referrers earn `{bonus}` per signup."
+               if enabled else "Referrals **disabled**.")
         await interaction.response.send_message(msg, ephemeral=True)
 
     @app_commands.command(name="inflation", description="Set automatic credit inflation. Amount=0 disables it.")

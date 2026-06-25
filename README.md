@@ -30,9 +30,12 @@ Python 3.11+, [discord.py](https://github.com/Rapptz/discord.py) 2.x, SQLite via
 | `/buy` | anyone | Buy YES or NO shares |
 | `/sell` | anyone | Sell shares back to the market |
 | `/transfer` | anyone | Send currency to another user |
-| `/portfolio` | anyone | Balance, positions, stats, net-worth graph |
+| `/portfolio` | anyone | Positions, rank, stats, net-worth graph (yours or another user's) |
 | `/leaderboard` | anyone | Top 10 by net worth |
+| `/data` | anyone | Server-wide economy stats |
 | `/info`, `/commands` | anyone | Bot / command info |
+
+Every command also works with a `!` prefix (e.g. `!markets`, `!buy 1 yes 500`).
 | `/settings ...` | admin | Currency, balance, inflation, market lifecycle, grants |
 
 ## Project layout

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS servers (
     inflation_days INTEGER NOT NULL DEFAULT 7,
     initial_subsidy INTEGER NOT NULL DEFAULT 5000,
     tax_percent REAL NOT NULL DEFAULT 0,
+    referral_enabled INTEGER NOT NULL DEFAULT 0,
+    referral_bonus INTEGER NOT NULL DEFAULT 500,
     created_at TEXT NOT NULL
 );
 
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     balance INTEGER NOT NULL,
     last_inflation TEXT NOT NULL,
     last_trade_at TEXT,
+    referred_by INTEGER,
     created_at TEXT NOT NULL,
     PRIMARY KEY (guild_id, user_id)
 );
@@ -88,7 +91,10 @@ CREATE TABLE IF NOT EXISTS snapshots (
 _ADDS = [
     ("servers", "initial_subsidy", "INTEGER NOT NULL DEFAULT 5000"),
     ("servers", "tax_percent", "REAL NOT NULL DEFAULT 0"),
+    ("servers", "referral_enabled", "INTEGER NOT NULL DEFAULT 0"),
+    ("servers", "referral_bonus", "INTEGER NOT NULL DEFAULT 500"),
     ("accounts", "last_trade_at", "TEXT"),
+    ("accounts", "referred_by", "INTEGER"),
     ("trades", "price_at_trade", "REAL"),
     ("trades", "price_after", "REAL"),
     ("trades", "tax_paid", "INTEGER NOT NULL DEFAULT 0"),
