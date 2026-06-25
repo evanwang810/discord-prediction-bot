@@ -14,7 +14,6 @@ COGS = ["cog_setup", "cog_accounts", "cog_markets", "cog_trade", "cog_settings",
 class PredictionBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
-        intents.members = True
         intents.message_content = True  # required for ! prefix commands
         super().__init__(command_prefix="!", intents=intents, help_command=None)
 
