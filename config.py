@@ -26,3 +26,8 @@ DEFAULT_REFERRAL_BONUS = 500
 TRADE_COOLDOWN_SECONDS = 60
 DAILY_TRADE_LIMIT = 100
 INFLATION_CHECK_INTERVAL = 3600
+
+# Optional: comma-separated server (guild) IDs. If set, slash commands sync to
+# these servers instantly instead of waiting up to an hour for the global sync.
+_ids = os.environ.get("SYNC_GUILD_IDS", "").replace(" ", "")
+SYNC_GUILD_IDS = [int(x) for x in _ids.split(",") if x]

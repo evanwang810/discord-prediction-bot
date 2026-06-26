@@ -1,3 +1,4 @@
+import io
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -5,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from db import connect
-from charts import odds_chart, portfolio_chart
+from charts import odds_config, portfolio_config, render_png
 from market import prices, price_credits, market_cap
 from networth import guild_net_worths
 
@@ -96,9 +97,13 @@ class MarketsCog(commands.Cog):
         embed.add_field(name="YES", value=f"{probs[-1]*100:.1f}%", inline=True)
         embed.add_field(name="Market cap", value=f"{cap:.0f} {cur_name}", inline=True)
         embed.add_field(name="Trades", value=str(len(rows)), inline=True)
-        embed.set_image(url=odds_chart(times, probs, m["question"]))
         embed.set_footer(text=f"winning shares pay {m['payout']} {cur_name}")
-        await ctx.send(embed=embed)
+        png = await render_png(odds_config(times, probs))
+        if png:
+            embed.set_image(url="attachment://odds.png")
+            await ctx.send(embed=embed, file=discord.File(io.BytesIO(png), "odds.png"))
+        else:
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="portfolio", description="View a portfolio, positions and rank.")
     @app_commands.describe(user="Whose portfolio to view (defaults to you)")
@@ -107,7 +112,7 @@ class MarketsCog(commands.Cog):
         gid = ctx.guild.id
         target = user or ctx.author
         tid = target.id
-        await ctx.defer(ephemeral=(user is None))
+        await ctx.defer()
         async with connect() as db:
             async with db.execute(
                 "SELECT a.balance, a.username, s.currency_name "
@@ -174,13 +179,18 @@ class MarketsCog(commands.Cog):
                 pos_lines.append(f"`#{p['market_id']}` {p['question'][:40]}{tag}: {' / '.join(bits)}")
             embed.add_field(name="Positions", value="\n".join(pos_lines)[:1024], inline=False)
 
+        png = None
         if len(snaps) >= 2:
             dates = [datetime.fromisoformat(s["snap_date"]) for s in snaps]
             worths = [s["net_worth"] for s in snaps]
-            embed.set_image(url=portfolio_chart(dates, worths, acc["username"], cur_name))
+            png = await render_png(portfolio_config(dates, worths))
         else:
             embed.set_footer(text="Net worth graph appears after a couple of daily snapshots.")
-        await ctx.send(embed=embed)
+        if png:
+            embed.set_image(url="attachment://portfolio.png")
+            await ctx.send(embed=embed, file=discord.File(io.BytesIO(png), "portfolio.png"))
+        else:
+            await ctx.send(embed=embed)
 
 
 async def setup(bot):

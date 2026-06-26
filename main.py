@@ -2,7 +2,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from config import TOKEN
+from config import TOKEN, SYNC_GUILD_IDS
 from db import init_db
 from inflation import inflation_loop
 from snapshots import snapshot_loop
@@ -22,7 +22,22 @@ class PredictionBot(commands.Bot):
         await init_db()
         for ext in COGS:
             await self.load_extension(ext)
-        await self.tree.sync()
+            print(f"Loaded {ext}")
+        if SYNC_GUILD_IDS:
+            # Instant per-server sync. Clear remote globals so they don't show
+            # up as duplicates alongside the guild copies.
+            for gid in SYNC_GUILD_IDS:
+                g = discord.Object(id=gid)
+                self.tree.copy_global_to(guild=g)
+                cmds = await self.tree.sync(guild=g)
+                print(f"Synced {len(cmds)} commands to guild {gid}: "
+                      f"{', '.join(sorted(c.name for c in cmds))}")
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
+        else:
+            cmds = await self.tree.sync()
+            print(f"Synced {len(cmds)} global commands (can take up to 1h to appear): "
+                  f"{', '.join(sorted(c.name for c in cmds))}")
         self._bg_tasks = [
             asyncio.create_task(inflation_loop(self)),
             asyncio.create_task(snapshot_loop(self)),

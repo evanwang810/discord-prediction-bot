@@ -1,16 +1,16 @@
-"""Chart rendering via QuickChart.io.
+"""Charts via QuickChart.io.
 
-We build a Chart.js config and hand Discord a URL, so QuickChart renders the PNG
-on their servers. No matplotlib, almost no RAM. The x axis is a real time scale
-so points sit at their actual moment in time, not evenly spaced.
+We build a Chart.js config, POST it to QuickChart, and get back PNG bytes that
+get attached to the Discord message. Posting (instead of putting the config in
+the image URL) avoids Discord's 2048-char embed-URL limit. No matplotlib, almost
+no RAM. The x axis is a real time scale so points sit at their actual time.
 """
-import json
-import urllib.parse
 from datetime import datetime
+import aiohttp
 
-_BASE = "https://quickchart.io/chart"
+_ENDPOINT = "https://quickchart.io/chart"
 _BG = "#2b2d31"
-_GRID = "rgba(255,255,255,0.08)"
+_GRID = "rgba(255,255,255,0.06)"
 _TICK = "#b9bbbe"
 _MAX_POINTS = 80
 
@@ -27,65 +27,70 @@ def _downsample(points):
     return [points[i] for i in idx]
 
 
-def _url(config) -> str:
-    c = urllib.parse.quote(json.dumps(config, separators=(",", ":")))
-    return f"{_BASE}?c={c}&w=640&h=320&devicePixelRatio=2&bkg={urllib.parse.quote(_BG)}"
-
-
 def _x_axis():
     return {
         "type": "time",
         "time": {"displayFormats": {"hour": "MMM D HH:mm", "day": "MMM D"}},
-        "ticks": {"fontColor": _TICK, "maxTicksLimit": 7, "maxRotation": 0},
-        "gridLines": {"color": _GRID, "zeroLineColor": _GRID},
+        "ticks": {"fontColor": _TICK, "maxTicksLimit": 4, "maxRotation": 0},
+        "gridLines": {"display": False},
     }
 
 
-def odds_chart(times: list[datetime], yes_probs: list[float], question: str) -> str:
+def odds_config(times: list[datetime], yes_probs: list[float]):
     pts = _downsample([{"t": _ms(t), "y": round(p * 100, 1)}
                        for t, p in zip(times, yes_probs)])
-    config = {
+    return {
         "type": "line",
         "data": {"datasets": [{
-            "label": "YES probability (%)", "data": pts,
-            "borderColor": "#57f287", "backgroundColor": "rgba(87,242,135,0.15)",
-            "borderWidth": 2, "fill": True, "steppedLine": True,
-            "pointRadius": 0, "lineTension": 0,
+            "data": pts, "borderColor": "#57f287",
+            "backgroundColor": "rgba(87,242,135,0.15)", "borderWidth": 2,
+            "fill": True, "steppedLine": True, "pointRadius": 0, "lineTension": 0,
         }]},
         "options": {
-            "legend": {"labels": {"fontColor": _TICK}},
+            "legend": {"display": False},
             "scales": {
                 "xAxes": [_x_axis()],
                 "yAxes": [{
-                    "ticks": {"min": 0, "max": 100, "fontColor": _TICK, "stepSize": 25},
+                    "ticks": {"min": 0, "max": 100, "stepSize": 50, "fontColor": _TICK},
                     "gridLines": {"color": _GRID, "zeroLineColor": _GRID},
-                    "scaleLabel": {"display": True, "labelString": "YES %", "fontColor": _TICK},
                 }],
             },
         },
     }
-    return _url(config)
 
 
-def portfolio_chart(dates: list[datetime], worths: list[float],
-                    username: str, currency: str) -> str:
+def portfolio_config(dates: list[datetime], worths: list[float]):
     pts = _downsample([{"t": _ms(d), "y": round(w)} for d, w in zip(dates, worths)])
-    config = {
+    return {
         "type": "line",
         "data": {"datasets": [{
-            "label": f"Net worth ({currency})", "data": pts,
-            "borderColor": "#5865f2", "backgroundColor": "rgba(88,101,242,0.15)",
-            "borderWidth": 2, "fill": True, "lineTension": 0, "pointRadius": 2,
+            "data": pts, "borderColor": "#5865f2",
+            "backgroundColor": "rgba(88,101,242,0.15)", "borderWidth": 2,
+            "fill": True, "pointRadius": 0, "lineTension": 0,
         }]},
         "options": {
-            "legend": {"labels": {"fontColor": _TICK}},
+            "legend": {"display": False},
             "scales": {
                 "xAxes": [_x_axis()],
                 "yAxes": [{
-                    "ticks": {"fontColor": _TICK},
+                    "ticks": {"fontColor": _TICK, "maxTicksLimit": 4},
                     "gridLines": {"color": _GRID, "zeroLineColor": _GRID},
                 }],
             },
         },
     }
-    return _url(config)
+
+
+async def render_png(config, width=640, height=280):
+    """POST a chart config to QuickChart, return PNG bytes (or None on failure)."""
+    payload = {"chart": config, "width": width, "height": height,
+               "backgroundColor": _BG, "devicePixelRatio": 2, "format": "png"}
+    try:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(_ENDPOINT, json=payload) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.read()
+    except Exception:
+        return None
