@@ -21,6 +21,7 @@ COMMANDS_HELP = [
     ("/leaderboard", "Top 10 traders by net worth."),
     ("/data", "Server-wide economy statistics."),
     ("/info", "Bot and server information."),
+    ("/guide", "Show the setup and command guide."),
     ("/commands", "Show this list."),
     ("/settings ...", "Admin: currency, balance, tax, referrals, markets, grants."),
 ]

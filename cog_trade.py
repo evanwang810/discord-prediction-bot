@@ -9,6 +9,7 @@ from market import (shares_for_credits, credits_for_shares,
                     shares_for_target_credits, prices)
 from config import TRADE_COOLDOWN_SECONDS, DAILY_TRADE_LIMIT
 from views import ConfirmView
+from snapshots import update_user_snapshot
 
 GREEN = discord.Color.from_rgb(87, 242, 135)
 BLURPLE = discord.Color.from_rgb(88, 101, 242)
@@ -146,6 +147,7 @@ class TradeCog(commands.Cog):
                 "VALUES (?, ?, ?, ?, ?, ?, 'buy', ?, ?, ?, ?)",
                 (gid, uid, market_id, outcome, shares, amount,
                  p_yes if outcome == "yes" else p_no, p_yes, tax, now_iso))
+            await update_user_snapshot(db, gid, uid)
             await db.commit()
 
         result = discord.Embed(color=GREEN, description=(
@@ -201,8 +203,9 @@ class TradeCog(commands.Cog):
 
         confirm = discord.Embed(color=GREY, description=(
             f"## Confirm sell\n"
-            f"Sell **{sell_shares:.2f}** {outcome.upper()} shares on `#{market_id}`?"))
-        confirm.add_field(name="You receive", value=f"{net} {cur_name}", inline=True)
+            f"Cash out **{net} {cur_name}** from your {outcome.upper()} position "
+            f"on `#{market_id}`?"))
+        confirm.add_field(name="Shares sold", value=f"{sell_shares:.2f}", inline=True)
         if tax > 0:
             confirm.add_field(name="Tax", value=f"{tax} {cur_name}", inline=True)
         confirm.set_footer(text="Final amount is at the live price when you confirm.")
@@ -262,11 +265,13 @@ class TradeCog(commands.Cog):
                 "VALUES (?, ?, ?, ?, ?, ?, 'sell', ?, ?, ?, ?)",
                 (gid, uid, market_id, outcome, sell_shares, net,
                  p_yes if outcome == "yes" else p_no, p_yes, tax, now_iso))
+            await update_user_snapshot(db, gid, uid)
             await db.commit()
 
         result = discord.Embed(color=BLURPLE, description=(
             f"## Sold {outcome.upper()} on #{market_id}\n"
-            f"{ctx.author.mention} sold **{sell_shares:.2f}** shares for **{net} {cur_name}**."))
+            f"{ctx.author.mention} cashed out **{net} {cur_name}** "
+            f"({sell_shares:.2f} shares sold)."))
         result.add_field(name="New odds", value=f"YES {p_yes*100:.0f}% / NO {p_no*100:.0f}%",
                          inline=True)
         if tax > 0:

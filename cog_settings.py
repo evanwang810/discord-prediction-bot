@@ -7,6 +7,7 @@ from typing import Literal, Optional
 from db import connect
 from market import subsidy_to_b
 from permissions import is_admin_or_owner
+from config import MAX_OPEN_MARKETS
 
 
 async def _server_exists(guild_id: int) -> bool:
@@ -203,6 +204,17 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
         if not await self._guard(interaction):
             return
         async with connect() as db:
+            async with db.execute(
+                "SELECT COUNT(*) AS n FROM markets WHERE guild_id = ? AND status = 'open'",
+                (interaction.guild_id,),
+            ) as cur:
+                open_n = (await cur.fetchone())["n"]
+            if open_n >= MAX_OPEN_MARKETS:
+                await interaction.response.send_message(
+                    f"You already have {MAX_OPEN_MARKETS} open markets (the limit). "
+                    f"Close or resolve one first with `/settings close_market` or "
+                    f"`/settings resolve`.", ephemeral=True)
+                return
             async with db.execute(
                 "SELECT initial_subsidy, currency_name, share_payout FROM servers "
                 "WHERE guild_id = ?", (interaction.guild_id,),
