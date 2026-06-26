@@ -7,21 +7,22 @@ from market import market_cap
 from networth import guild_net_worths
 from config import TRADE_COOLDOWN_SECONDS, DAILY_TRADE_LIMIT
 
+BLURPLE = discord.Color.from_rgb(88, 101, 242)
 
 COMMANDS_HELP = [
-    ("/setup", "Admin — initialize the bot on this server (run once)."),
+    ("/setup", "Admin: initialize the bot on this server (run once)."),
     ("/create", "Create your account (optionally name who referred you)."),
     ("/markets", "List open prediction markets."),
     ("/odds", "Graph of a market's odds over time."),
     ("/buy", "Buy YES or NO shares on a market."),
-    ("/sell", "Sell shares you hold back to the market."),
+    ("/sell", "Sell a position for a currency amount."),
     ("/transfer", "Send currency to another user."),
-    ("/portfolio", "View your (or someone's) positions, rank and graph."),
+    ("/portfolio", "View positions, rank and graph (yours or someone's)."),
     ("/leaderboard", "Top 10 traders by net worth."),
     ("/data", "Server-wide economy statistics."),
     ("/info", "Bot and server information."),
     ("/commands", "Show this list."),
-    ("/settings ...", "Admin — currency, balance, tax, referrals, markets, grants."),
+    ("/settings ...", "Admin: currency, balance, tax, referrals, markets, grants."),
 ]
 
 
@@ -32,10 +33,10 @@ class InfoCog(commands.Cog):
     @commands.hybrid_command(name="commands", description="List all available commands.")
     @commands.guild_only()
     async def commands_(self, ctx: commands.Context):
-        lines = ["**Commands** (every command works as `/name` or `!name`)"]
-        for cmd, desc in COMMANDS_HELP:
-            lines.append(f"`{cmd}` — {desc}")
-        await ctx.send("\n".join(lines))
+        body = "\n".join(f"`{cmd}` {desc}" for cmd, desc in COMMANDS_HELP)
+        embed = discord.Embed(color=BLURPLE, description=(
+            "## Commands\nEvery command works as `/name` or `!name`.\n\n" + body))
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="info", description="Show bot and server info.")
     @commands.guild_only()
@@ -58,18 +59,22 @@ class InfoCog(commands.Cog):
                 (gid, gid)
             ) as cur:
                 m = await cur.fetchone()
-        await ctx.send(
-            f"**Prediction Market Bot**\n"
-            f"Binary YES/NO markets priced by an LMSR market maker. Each winning share pays "
-            f"**{s['share_payout']} {s['currency_name']}**. Trades are limited to one every "
-            f"**{TRADE_COOLDOWN_SECONDS}s** and **{DAILY_TRADE_LIMIT}/day** per user.\n\n"
-            f"**This server**\n"
-            f"- Currency: `{s['currency_name']}`\n"
-            f"- Starting balance: `{s['starting_balance']}`\n"
-            f"- Default market subsidy: `{s['initial_subsidy']}`\n"
-            f"- Accounts: `{accounts}`\n"
-            f"- Markets open / resolved: `{m['open_n']}` / `{m['res_n']}`\n\n"
-            f"Run `/commands` for the full command list.")
+        embed = discord.Embed(color=BLURPLE, description=(
+            "## Prediction Market Bot\n"
+            "Binary YES/NO markets priced by an LMSR market maker. Buy shares on the "
+            "outcome you believe, sell anytime, and winning shares cash out when an admin "
+            "resolves the market."))
+        embed.add_field(name="Currency", value=s["currency_name"], inline=True)
+        embed.add_field(name="Starting balance", value=str(s["starting_balance"]), inline=True)
+        embed.add_field(name="Winning share pays", value=str(s["share_payout"]), inline=True)
+        embed.add_field(name="Accounts", value=str(accounts), inline=True)
+        embed.add_field(name="Markets (open/resolved)",
+                        value=f"{m['open_n']} / {m['res_n']}", inline=True)
+        embed.add_field(name="Trade limits",
+                        value=f"1 per {TRADE_COOLDOWN_SECONDS}s, {DAILY_TRADE_LIMIT}/day",
+                        inline=True)
+        embed.set_footer(text="Run /commands for the full list.")
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="data", description="Server-wide economy statistics.")
     @commands.guild_only()
@@ -100,14 +105,15 @@ class InfoCog(commands.Cog):
         invested = sum(market_cap(m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"])
                        for m in open_markets)
         cur_name = srv["currency_name"]
-        await ctx.send(
-            f"**{ctx.guild.name} — economy**\n"
-            f"- Accounts: **{acc['accounts']}**\n"
-            f"- Trades made: **{trades}**\n"
-            f"- Open markets: **{len(open_markets)}**\n"
-            f"- Credits in wallets: **{acc['credits']:.0f} {cur_name}**\n"
-            f"- Credits invested in open markets: **{invested:.0f} {cur_name}**\n"
-            f"- Total credits in circulation: **{acc['credits'] + invested:.0f} {cur_name}**")
+        embed = discord.Embed(color=BLURPLE, description=f"## {ctx.guild.name} economy")
+        embed.add_field(name="Accounts", value=str(acc["accounts"]), inline=True)
+        embed.add_field(name="Trades made", value=str(trades), inline=True)
+        embed.add_field(name="Open markets", value=str(len(open_markets)), inline=True)
+        embed.add_field(name="In wallets", value=f"{acc['credits']:.0f} {cur_name}", inline=True)
+        embed.add_field(name="Invested", value=f"{invested:.0f} {cur_name}", inline=True)
+        embed.add_field(name="Total in circulation",
+                        value=f"{acc['credits'] + invested:.0f} {cur_name}", inline=True)
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="leaderboard", description="Top traders by net worth.")
     @commands.guild_only()
@@ -140,16 +146,21 @@ class InfoCog(commands.Cog):
 
         ranked = sorted(net_map.items(), key=lambda kv: -kv[1])[:10]
         cur_name = srv["currency_name"]
-        lines = ["**Leaderboard** — net worth (balance + open positions at market price)"]
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        lines = []
         for i, (uid, worth) in enumerate(ranked, start=1):
             a = accounts.get(uid)
             if not a:
                 continue
             wins, total = stats.get(uid, (0, 0))
-            wr = f"{wins*100/total:.0f}%" if total > 0 else "—"
-            lines.append(f"`{i:>2}.` **{a['username']}** — `{worth:.0f} {cur_name}` "
-                         f"(balance {a['balance']}, win rate {wr})")
-        await ctx.send("\n".join(lines))
+            wr = f"{wins*100/total:.0f}%" if total > 0 else "no record"
+            rank = medals.get(i, f"`{i:>2}.`")
+            lines.append(f"{rank} **{a['username']}**  `{worth:.0f} {cur_name}`  "
+                         f"(win rate {wr})")
+        embed = discord.Embed(color=BLURPLE, description=(
+            "## Leaderboard\nNet worth = balance plus open positions at market price.\n\n"
+            + "\n".join(lines)))
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

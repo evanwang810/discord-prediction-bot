@@ -25,14 +25,14 @@ def lmsr_cost(y, n, b):
 
 
 def prices(y, n, b):
-    """(p_yes, p_no), implied probabilities summing to 1 — independent of payout."""
+    """(p_yes, p_no), implied probabilities summing to 1, independent of payout."""
     _, ey, en = _shifted(y, n, b)
     s = ey + en
     return ey / s, en / s
 
 
 def price_credits(y, n, b, payout=SHARE_PAYOUT):
-    """(yes_credits, no_credits) — credits per share."""
+    """(yes_credits, no_credits), credits per share."""
     py, pn = prices(y, n, b)
     return py * payout, pn * payout
 
@@ -76,6 +76,26 @@ def credits_for_shares(y, n, b, side, shares, payout=SHARE_PAYOUT):
     else:
         refund_budget = lmsr_cost(y, n, b) - lmsr_cost(y, n - shares, b)
     return max(0.0, refund_budget * payout)
+
+
+def shares_for_target_credits(y, n, b, side, target_credits, payout, max_shares):
+    """Shares to sell so the gross refund is about target_credits, capped at max_shares.
+
+    Refund is monotonic in shares, so we bisect. If selling everything still
+    yields less than the target, sell everything.
+    """
+    if target_credits <= 0 or max_shares <= 0:
+        return 0.0
+    if credits_for_shares(y, n, b, side, max_shares, payout) <= target_credits:
+        return max_shares
+    lo, hi = 0.0, max_shares
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if credits_for_shares(y, n, b, side, mid, payout) < target_credits:
+            lo = mid
+        else:
+            hi = mid
+    return hi
 
 
 def subsidy_to_b(subsidy, payout=SHARE_PAYOUT):

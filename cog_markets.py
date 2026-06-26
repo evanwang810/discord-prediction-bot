@@ -41,18 +41,18 @@ class MarketsCog(commands.Cog):
             await ctx.send("No open markets.")
             return
         cur_name = srv["currency_name"] if srv else "credits"
-        embed = discord.Embed(title="Open markets",
-                              color=discord.Color.from_rgb(88, 101, 242))
+        embed = discord.Embed(color=discord.Color.from_rgb(88, 101, 242),
+                              description="## Open markets")
         for r in rows:
             y_c, n_c = price_credits(r["yes_shares"], r["no_shares"], r["liquidity"], r["payout"])
             p_y, _ = prices(r["yes_shares"], r["no_shares"], r["liquidity"])
             cap = market_cap(r["yes_shares"], r["no_shares"], r["liquidity"], r["payout"])
             embed.add_field(
-                name=f"#{r['market_id']} · {r['question']}",
-                value=(f"YES `{y_c:.0f}` ({p_y*100:.0f}%) · NO `{n_c:.0f}` ({(1-p_y)*100:.0f}%)\n"
-                       f"market cap `{cap:.0f} {cur_name}` · pays `{r['payout']}`/win"),
+                name=f"#{r['market_id']}  {r['question']}",
+                value=(f"YES `{y_c:.0f}` ({p_y*100:.0f}%)  NO `{n_c:.0f}` ({(1-p_y)*100:.0f}%)\n"
+                       f"market cap `{cap:.0f} {cur_name}`, pays `{r['payout']}`/win"),
                 inline=False)
-        embed.set_footer(text=f"{len(rows)} open · trade with /buy or !buy")
+        embed.set_footer(text=f"{len(rows)} open. Trade with /buy or !buy")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="odds", description="Graph of a market's odds over time.")
@@ -91,8 +91,8 @@ class MarketsCog(commands.Cog):
         cap = market_cap(m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"])
         cur_name = m["currency_name"]
 
-        embed = discord.Embed(title=f"#{market_id} · {m['question']}",
-                              color=_odds_color(probs[-1]))
+        embed = discord.Embed(color=_odds_color(probs[-1]),
+                              description=f"## #{market_id}  {m['question']}")
         embed.add_field(name="YES", value=f"{probs[-1]*100:.1f}%", inline=True)
         embed.add_field(name="Market cap", value=f"{cap:.0f} {cur_name}", inline=True)
         embed.add_field(name="Trades", value=str(len(rows)), inline=True)
@@ -147,13 +147,14 @@ class MarketsCog(commands.Cog):
         net = net_map.get(tid, float(acc["balance"]))
         ranking = sorted(net_map.items(), key=lambda kv: -kv[1])
         rank = next((i for i, (u, _) in enumerate(ranking, 1) if u == tid), None)
-        rank_str = f"#{rank} of {len(ranking)}" if rank else "—"
+        rank_str = f"#{rank} of {len(ranking)}" if rank else "unranked"
 
         wins, total = stats["wins"] or 0, stats["total"] or 0
-        wr = f"{wins}/{total} ({wins*100/total:.0f}%)" if total > 0 else "—"
+        wr = f"{wins}/{total} ({wins*100/total:.0f}%)" if total > 0 else "no record"
 
-        embed = discord.Embed(title=f"{acc['username']} — rank {rank_str}",
-                              color=discord.Color.from_rgb(88, 101, 242))
+        embed = discord.Embed(color=discord.Color.from_rgb(88, 101, 242),
+                              description=f"## {acc['username']}\nRank {rank_str}")
+        embed.set_thumbnail(url=target.display_avatar.url)
         embed.add_field(name="Net worth", value=f"{net:.0f} {cur_name}", inline=True)
         embed.add_field(name="Balance", value=f"{acc['balance']} {cur_name}", inline=True)
         embed.add_field(name="Win rate", value=wr, inline=True)
@@ -170,7 +171,7 @@ class MarketsCog(commands.Cog):
                     bits.append(f"NO `{p['no_shares']:.1f}`")
                 tag = f" *(resolved {p['outcome'].upper()})*" if p["status"] == "resolved" else \
                       (" *(closed)*" if p["status"] == "closed" else "")
-                pos_lines.append(f"`#{p['market_id']}` {p['question'][:40]}{tag} — {' / '.join(bits)}")
+                pos_lines.append(f"`#{p['market_id']}` {p['question'][:40]}{tag}: {' / '.join(bits)}")
             embed.add_field(name="Positions", value="\n".join(pos_lines)[:1024], inline=False)
 
         if len(snaps) >= 2:

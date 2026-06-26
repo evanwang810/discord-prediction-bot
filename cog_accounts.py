@@ -80,11 +80,13 @@ class AccountsCog(commands.Cog):
                              f"{srv['currency_name']}** referral bonus.")
             await db.commit()
 
-        msg = (f"{ctx.author.mention} joined as `{username}` with "
-               f"**{srv['starting_balance']} {srv['currency_name']}**.")
+        desc = (f"## Account created\n{ctx.author.mention} joined as `{username}` with "
+                f"**{srv['starting_balance']} {srv['currency_name']}**.")
         if notes:
-            msg += "\n" + "\n".join(notes)
-        await ctx.send(msg)
+            desc += "\n\n" + "\n".join(notes)
+        embed = discord.Embed(color=discord.Color.from_rgb(87, 242, 135), description=desc)
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="transfer", description="Send currency to another user.")
     @app_commands.describe(user="Recipient", amount="How much to send")
@@ -129,8 +131,10 @@ class AccountsCog(commands.Cog):
                 "VALUES (?, ?, ?, ?, ?)",
                 (gid, uid, user.id, amount, datetime.now(timezone.utc).isoformat()))
             await db.commit()
-        await ctx.send(f"{ctx.author.mention} sent **{amount} {sender['currency_name']}** "
-                       f"to {user.mention}.")
+        embed = discord.Embed(color=discord.Color.from_rgb(88, 101, 242), description=(
+            f"## Transfer sent\n{ctx.author.mention} sent "
+            f"**{amount} {sender['currency_name']}** to {user.mention}."))
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

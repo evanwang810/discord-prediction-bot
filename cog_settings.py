@@ -51,20 +51,20 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             if s["inflation_amount"] == 0
             else f"+{s['inflation_amount']} every {s['inflation_days']} day(s)"
         )
-        await interaction.response.send_message(
-            "**Server settings**\n"
-            f"- Currency: `{s['currency_name']}`\n"
-            f"- Starting balance: `{s['starting_balance']}`\n"
-            f"- Initial market subsidy: `{s['initial_subsidy']}`\n"
-            f"- Transaction tax: `{s['tax_percent']}%`\n"
-            f"- Referrals: {'on' if s['referral_enabled'] else 'off'} "
-            f"(bonus `{s['referral_bonus']}`)\n"
-            f"- Inflation: {infl}\n"
-            f"- Share payout: `{s['share_payout']} {s['currency_name']}` per winning share "
-            f"(new markets start at `{s['share_payout'] // 2}`)\n"
-            f"- Open markets: `{open_n}`",
-            ephemeral=True,
-        )
+        embed = discord.Embed(color=discord.Color.from_rgb(88, 101, 242),
+                              description="## Server settings")
+        embed.add_field(name="Currency", value=s["currency_name"], inline=True)
+        embed.add_field(name="Starting balance", value=str(s["starting_balance"]), inline=True)
+        embed.add_field(name="Initial subsidy", value=str(s["initial_subsidy"]), inline=True)
+        embed.add_field(name="Transaction tax", value=f"{s['tax_percent']}%", inline=True)
+        embed.add_field(name="Referrals",
+                        value=("on, bonus " + str(s["referral_bonus"])
+                               if s["referral_enabled"] else "off"), inline=True)
+        embed.add_field(name="Inflation", value=infl, inline=True)
+        embed.add_field(name="Share payout",
+                        value=f"{s['share_payout']} (start {s['share_payout'] // 2})", inline=True)
+        embed.add_field(name="Open markets", value=str(open_n), inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="currency", description="Rename the server currency.")
     @app_commands.guild_only()
@@ -146,7 +146,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
                 "UPDATE servers SET referral_enabled = ?, referral_bonus = ? WHERE guild_id = ?",
                 (1 if enabled else 0, bonus, interaction.guild_id))
             await db.commit()
-        msg = (f"Referrals **enabled** — referrers earn `{bonus}` per signup."
+        msg = (f"Referrals **enabled**. Referrers earn `{bonus}` per signup."
                if enabled else "Referrals **disabled**.")
         await interaction.response.send_message(msg, ephemeral=True)
 
@@ -221,7 +221,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             await db.commit()
         await interaction.response.send_message(
             f"Opened market `#{mid}`: {question}\n"
-            f"Subsidy: **{sub} {srv['currency_name']}** — starting price "
+            f"Subsidy: **{sub} {srv['currency_name']}**, starting price "
             f"**{payout // 2} {srv['currency_name']}/share**, winning shares pay "
             f"**{payout}**.",
             ephemeral=True,
