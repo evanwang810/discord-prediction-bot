@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from db import connect
-from market import market_cap, SHARE_PAYOUT
+from market import market_cap
 from networth import guild_net_worths
 from config import TRADE_COOLDOWN_SECONDS, DAILY_TRADE_LIMIT
 
@@ -61,7 +61,7 @@ class InfoCog(commands.Cog):
         await ctx.send(
             f"**Prediction Market Bot**\n"
             f"Binary YES/NO markets priced by an LMSR market maker. Each winning share pays "
-            f"**{SHARE_PAYOUT} {s['currency_name']}**. Trades are limited to one every "
+            f"**{s['share_payout']} {s['currency_name']}**. Trades are limited to one every "
             f"**{TRADE_COOLDOWN_SECONDS}s** and **{DAILY_TRADE_LIMIT}/day** per user.\n\n"
             f"**This server**\n"
             f"- Currency: `{s['currency_name']}`\n"
@@ -93,11 +93,11 @@ class InfoCog(commands.Cog):
             ) as cur:
                 trades = (await cur.fetchone())["n"]
             async with db.execute(
-                "SELECT yes_shares, no_shares, liquidity FROM markets "
+                "SELECT yes_shares, no_shares, liquidity, payout FROM markets "
                 "WHERE guild_id = ? AND status = 'open'", (gid,)
             ) as cur:
                 open_markets = await cur.fetchall()
-        invested = sum(market_cap(m["yes_shares"], m["no_shares"], m["liquidity"])
+        invested = sum(market_cap(m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"])
                        for m in open_markets)
         cur_name = srv["currency_name"]
         await ctx.send(

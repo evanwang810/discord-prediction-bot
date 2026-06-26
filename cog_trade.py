@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from db import connect
-from market import shares_for_credits, credits_for_shares, prices, SHARE_PAYOUT
+from market import shares_for_credits, credits_for_shares, prices
 from config import TRADE_COOLDOWN_SECONDS, DAILY_TRADE_LIMIT
 
 
@@ -49,7 +49,7 @@ class TradeCog(commands.Cog):
 
     async def _open_market(self, db, ctx, market_id):
         async with db.execute(
-            "SELECT market_id, status, liquidity, yes_shares, no_shares "
+            "SELECT market_id, status, liquidity, yes_shares, no_shares, payout "
             "FROM markets WHERE guild_id = ? AND market_id = ?", (ctx.guild.id, market_id)
         ) as cur:
             m = await cur.fetchone()
@@ -83,7 +83,7 @@ class TradeCog(commands.Cog):
             if m is None:
                 return
 
-            y, n, b = m["yes_shares"], m["no_shares"], m["liquidity"]
+            y, n, b, payout = m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"]
             p_yes_before, p_no_before = prices(y, n, b)
             price_at = p_yes_before if outcome == "yes" else p_no_before
             tax = int(amount * acc["tax_percent"] / 100)
@@ -92,7 +92,7 @@ class TradeCog(commands.Cog):
                 await ctx.send("Amount is too small — the tax would eat all of it.",
                                ephemeral=True)
                 return
-            shares = shares_for_credits(y, n, b, outcome, float(spend))
+            shares = shares_for_credits(y, n, b, outcome, float(spend), payout)
             if shares <= 0:
                 await ctx.send("That amount can't buy any shares at the current price.",
                                ephemeral=True)
@@ -131,7 +131,7 @@ class TradeCog(commands.Cog):
             f"(avg `{spend/shares:.2f} {cur_name}/share`).\n"
             f"Implied price before: YES `{p_yes_before*100:.1f}%` / NO `{p_no_before*100:.1f}%`\n"
             f"Implied price after:  YES `{p_yes_after*100:.1f}%` / NO `{p_no_after*100:.1f}%`\n"
-            f"Each winning share pays **{SHARE_PAYOUT} {cur_name}** on resolution.")
+            f"Each winning share pays **{payout} {cur_name}** on resolution.")
 
     @commands.hybrid_command(name="sell", description="Sell shares you hold back to the market.")
     @app_commands.describe(market_id="ID of the market (see /markets)",
@@ -167,10 +167,10 @@ class TradeCog(commands.Cog):
                 return
             sell_shares = min(sell_shares, held)
 
-            y, n, b = m["yes_shares"], m["no_shares"], m["liquidity"]
+            y, n, b, payout = m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"]
             p_yes_before, p_no_before = prices(y, n, b)
             price_at = p_yes_before if outcome == "yes" else p_no_before
-            gross = credits_for_shares(y, n, b, outcome, sell_shares)
+            gross = credits_for_shares(y, n, b, outcome, sell_shares, payout)
             tax = int(gross * acc["tax_percent"] / 100)
             payout = int(round(gross - tax))
             if payout <= 0:

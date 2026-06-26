@@ -6,8 +6,17 @@ from typing import Optional
 
 from db import connect
 from charts import odds_chart, portfolio_chart
-from market import prices, price_credits, market_cap, SHARE_PAYOUT
+from market import prices, price_credits, market_cap
 from networth import guild_net_worths
+
+
+def _odds_color(p_yes: float) -> discord.Color:
+    # green when YES is favoured, red when NO is, grey near 50/50
+    if p_yes >= 0.55:
+        return discord.Color.from_rgb(87, 242, 135)
+    if p_yes <= 0.45:
+        return discord.Color.from_rgb(237, 66, 69)
+    return discord.Color.from_rgb(148, 155, 164)
 
 
 class MarketsCog(commands.Cog):
@@ -24,7 +33,7 @@ class MarketsCog(commands.Cog):
             ) as cur:
                 srv = await cur.fetchone()
             async with db.execute(
-                "SELECT market_id, question, yes_shares, no_shares, liquidity "
+                "SELECT market_id, question, yes_shares, no_shares, liquidity, payout "
                 "FROM markets WHERE guild_id = ? AND status = 'open' ORDER BY market_id", (gid,)
             ) as cur:
                 rows = await cur.fetchall()
@@ -32,16 +41,19 @@ class MarketsCog(commands.Cog):
             await ctx.send("No open markets.")
             return
         cur_name = srv["currency_name"] if srv else "credits"
-        lines = [f"**Open markets** — winning shares pay **{SHARE_PAYOUT} {cur_name}** each"]
+        embed = discord.Embed(title="Open markets",
+                              color=discord.Color.from_rgb(88, 101, 242))
         for r in rows:
-            y_c, n_c = price_credits(r["yes_shares"], r["no_shares"], r["liquidity"])
-            p_y, p_n = prices(r["yes_shares"], r["no_shares"], r["liquidity"])
-            cap = market_cap(r["yes_shares"], r["no_shares"], r["liquidity"])
-            lines.append(
-                f"`#{r['market_id']}` {r['question']}\n"
-                f"   YES `{y_c:.1f}` ({p_y*100:.1f}%)  /  NO `{n_c:.1f}` ({p_n*100:.1f}%)  "
-                f"·  market cap `{cap:.0f} {cur_name}`")
-        await ctx.send("\n".join(lines))
+            y_c, n_c = price_credits(r["yes_shares"], r["no_shares"], r["liquidity"], r["payout"])
+            p_y, _ = prices(r["yes_shares"], r["no_shares"], r["liquidity"])
+            cap = market_cap(r["yes_shares"], r["no_shares"], r["liquidity"], r["payout"])
+            embed.add_field(
+                name=f"#{r['market_id']} · {r['question']}",
+                value=(f"YES `{y_c:.0f}` ({p_y*100:.0f}%) · NO `{n_c:.0f}` ({(1-p_y)*100:.0f}%)\n"
+                       f"market cap `{cap:.0f} {cur_name}` · pays `{r['payout']}`/win"),
+                inline=False)
+        embed.set_footer(text=f"{len(rows)} open · trade with /buy or !buy")
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="odds", description="Graph of a market's odds over time.")
     @app_commands.describe(market_id="ID of the market (see /markets)")
@@ -52,7 +64,7 @@ class MarketsCog(commands.Cog):
         async with connect() as db:
             async with db.execute(
                 "SELECT m.question, m.status, m.created_at, m.yes_shares, m.no_shares, "
-                "m.liquidity, s.currency_name FROM markets m "
+                "m.liquidity, m.payout, s.currency_name FROM markets m "
                 "JOIN servers s ON m.guild_id = s.guild_id "
                 "WHERE m.guild_id = ? AND m.market_id = ?", (gid, market_id)
             ) as cur:
@@ -76,13 +88,17 @@ class MarketsCog(commands.Cog):
             py, _ = prices(m["yes_shares"], m["no_shares"], m["liquidity"])
             times.append(datetime.now(times[0].tzinfo))
             probs.append(py)
-        cap = market_cap(m["yes_shares"], m["no_shares"], m["liquidity"])
-        buf = odds_chart(times, probs, m["question"])
-        await ctx.send(
-            f"`#{market_id}` {m['question']} — **{len(rows)}** trade(s), "
-            f"currently `{probs[-1]*100:.1f}%` YES · market cap "
-            f"`{cap:.0f} {m['currency_name']}`",
-            file=discord.File(buf, filename=f"odds_{market_id}.png"))
+        cap = market_cap(m["yes_shares"], m["no_shares"], m["liquidity"], m["payout"])
+        cur_name = m["currency_name"]
+
+        embed = discord.Embed(title=f"#{market_id} · {m['question']}",
+                              color=_odds_color(probs[-1]))
+        embed.add_field(name="YES", value=f"{probs[-1]*100:.1f}%", inline=True)
+        embed.add_field(name="Market cap", value=f"{cap:.0f} {cur_name}", inline=True)
+        embed.add_field(name="Trades", value=str(len(rows)), inline=True)
+        embed.set_image(url=odds_chart(times, probs, m["question"]))
+        embed.set_footer(text=f"winning shares pay {m['payout']} {cur_name}")
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="portfolio", description="View a portfolio, positions and rank.")
     @app_commands.describe(user="Whose portfolio to view (defaults to you)")
@@ -105,8 +121,7 @@ class MarketsCog(commands.Cog):
                 return
             async with db.execute(
                 "SELECT p.market_id, p.yes_shares, p.no_shares, m.question, m.status, "
-                "m.outcome, m.yes_shares AS my, m.no_shares AS mn, m.liquidity "
-                "FROM positions p JOIN markets m ON p.market_id = m.market_id "
+                "m.outcome FROM positions p JOIN markets m ON p.market_id = m.market_id "
                 "WHERE p.guild_id = ? AND p.user_id = ? "
                 "AND (p.yes_shares > 0 OR p.no_shares > 0) ORDER BY m.market_id", (gid, tid)
             ) as cur:
@@ -134,49 +149,37 @@ class MarketsCog(commands.Cog):
         rank = next((i for i, (u, _) in enumerate(ranking, 1) if u == tid), None)
         rank_str = f"#{rank} of {len(ranking)}" if rank else "—"
 
-        pos_lines = []
-        for p in positions:
-            bits = []
-            if p["yes_shares"] > 0:
-                bits.append(f"YES `{p['yes_shares']:.2f}`")
-            if p["no_shares"] > 0:
-                bits.append(f"NO `{p['no_shares']:.2f}`")
-            tag = ""
-            if p["status"] == "resolved":
-                tag = f" *(resolved {p['outcome'].upper()})*"
-            elif p["status"] == "closed":
-                tag = " *(closed)*"
-            pos_lines.append(f"`#{p['market_id']}` {p['question']}{tag} — {' / '.join(bits)}")
-
         wins, total = stats["wins"] or 0, stats["total"] or 0
         wr = f"{wins}/{total} ({wins*100/total:.0f}%)" if total > 0 else "—"
-        lines = [
-            f"**{acc['username']}** — rank **{rank_str}**",
-            f"Net worth (incl. open positions at market price): **{net:.0f} {cur_name}**",
-            f"Balance: **{acc['balance']} {cur_name}**",
-            f"Total trades: **{stats['all_trades'] or 0}** "
-            f"({stats['recent'] or 0} in the last 7 days)",
-            f"Win rate on resolved trades: **{wr}**",
-        ]
-        if pos_lines:
-            lines.append("")
-            lines.append("**Positions:**")
-            lines.extend(pos_lines)
 
-        file = None
+        embed = discord.Embed(title=f"{acc['username']} — rank {rank_str}",
+                              color=discord.Color.from_rgb(88, 101, 242))
+        embed.add_field(name="Net worth", value=f"{net:.0f} {cur_name}", inline=True)
+        embed.add_field(name="Balance", value=f"{acc['balance']} {cur_name}", inline=True)
+        embed.add_field(name="Win rate", value=wr, inline=True)
+        embed.add_field(name="Total trades",
+                        value=f"{stats['all_trades'] or 0} ({stats['recent'] or 0} this week)",
+                        inline=True)
+        if positions:
+            pos_lines = []
+            for p in positions:
+                bits = []
+                if p["yes_shares"] > 0:
+                    bits.append(f"YES `{p['yes_shares']:.1f}`")
+                if p["no_shares"] > 0:
+                    bits.append(f"NO `{p['no_shares']:.1f}`")
+                tag = f" *(resolved {p['outcome'].upper()})*" if p["status"] == "resolved" else \
+                      (" *(closed)*" if p["status"] == "closed" else "")
+                pos_lines.append(f"`#{p['market_id']}` {p['question'][:40]}{tag} — {' / '.join(bits)}")
+            embed.add_field(name="Positions", value="\n".join(pos_lines)[:1024], inline=False)
+
         if len(snaps) >= 2:
             dates = [datetime.fromisoformat(s["snap_date"]) for s in snaps]
             worths = [s["net_worth"] for s in snaps]
-            buf = portfolio_chart(dates, worths, acc["username"], cur_name)
-            file = discord.File(buf, filename="portfolio.png")
+            embed.set_image(url=portfolio_chart(dates, worths, acc["username"], cur_name))
         else:
-            lines.append("")
-            lines.append("*Net worth graph appears after a couple of daily snapshots.*")
-
-        if file:
-            await ctx.send("\n".join(lines), file=file)
-        else:
-            await ctx.send("\n".join(lines))
+            embed.set_footer(text="Net worth graph appears after a couple of daily snapshots.")
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):

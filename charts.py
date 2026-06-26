@@ -1,73 +1,80 @@
-"""Matplotlib chart rendering. Returns PNG bytes ready for discord.File.
+"""Chart rendering via QuickChart.io.
 
-matplotlib is imported lazily inside _plt() rather than at module load, so the
-~130 MB import cost is only paid the first time someone requests a chart. This
-keeps idle memory low enough for small hosts (e.g. bot-hosting.net's 256 MB
-free tier).
+We build a Chart.js config and hand Discord a URL — QuickChart renders the PNG
+on their servers, so the bot ships no matplotlib/numpy and uses almost no RAM.
+The returned URL goes straight into an embed's image.
 """
-import io
+import json
+import urllib.parse
 from datetime import datetime
 
-_plt_mod = None
-_mdates_mod = None
+_BASE = "https://quickchart.io/chart"
+_BG = "#2b2d31"          # Discord dark background
+_GRID = "rgba(255,255,255,0.08)"
+_TICK = "#b9bbbe"
+_MAX_POINTS = 60         # keep the GET URL comfortably short
 
 
-def _plt():
-    global _plt_mod, _mdates_mod
-    if _plt_mod is None:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        import matplotlib.dates as mdates
-        _plt_mod, _mdates_mod = plt, mdates
-    return _plt_mod, _mdates_mod
+def _downsample(xs, ys):
+    if len(xs) <= _MAX_POINTS:
+        return xs, ys
+    step = len(xs) / _MAX_POINTS
+    idx = sorted({int(i * step) for i in range(_MAX_POINTS)} | {len(xs) - 1})
+    return [xs[i] for i in idx], [ys[i] for i in idx]
 
 
-_STYLE = {
-    "figure.facecolor": "#2b2d31",
-    "axes.facecolor": "#2b2d31",
-    "axes.edgecolor": "#72767d",
-    "axes.labelcolor": "#dcddde",
-    "xtick.color": "#b9bbbe",
-    "ytick.color": "#b9bbbe",
-    "text.color": "#dcddde",
-    "grid.color": "#3f4248",
-}
+def _url(config) -> str:
+    c = urllib.parse.quote(json.dumps(config, separators=(",", ":")))
+    return (f"{_BASE}?c={c}&w=640&h=320&devicePixelRatio=2"
+            f"&bkg={urllib.parse.quote(_BG)}")
 
 
-def _render(plt, fig) -> io.BytesIO:
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return buf
+def _axes(y_label, y_min=None, y_max=None):
+    y = {"grid": {"color": _GRID}, "ticks": {"color": _TICK},
+         "title": {"display": True, "text": y_label, "color": _TICK}}
+    if y_min is not None:
+        y["min"] = y_min
+    if y_max is not None:
+        y["max"] = y_max
+    return {"x": {"grid": {"color": _GRID}, "ticks": {"color": _TICK,
+            "maxTicksLimit": 8}}, "y": y}
 
 
-def odds_chart(times: list[datetime], yes_probs: list[float], question: str) -> io.BytesIO:
-    plt, mdates = _plt()
-    with plt.rc_context(_STYLE):
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(times, [p * 100 for p in yes_probs], color="#57f287", linewidth=2,
-                drawstyle="steps-post")
-        ax.set_ylim(0, 100)
-        ax.axhline(50, color="#72767d", linestyle="--", linewidth=0.8)
-        ax.set_ylabel("YES probability (%)")
-        ax.set_title(question[:80])
-        ax.grid(True, alpha=0.5)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d\n%H:%M"))
-        fig.autofmt_xdate(rotation=0, ha="center")
-        return _render(plt, fig)
+def odds_chart(times: list[datetime], yes_probs: list[float], question: str) -> str:
+    times, yes_probs = _downsample(times, yes_probs)
+    labels = [t.strftime("%m/%d %H:%M") for t in times]
+    config = {
+        "type": "line",
+        "data": {"labels": labels, "datasets": [{
+            "label": "YES probability (%)",
+            "data": [round(p * 100, 1) for p in yes_probs],
+            "borderColor": "#57f287", "backgroundColor": "rgba(87,242,135,0.15)",
+            "borderWidth": 2, "fill": True, "tension": 0.25,
+            "pointRadius": 0, "stepped": False,
+        }]},
+        "options": {
+            "plugins": {"legend": {"labels": {"color": _TICK}}},
+            "scales": _axes("YES %", 0, 100),
+        },
+    }
+    return _url(config)
 
 
 def portfolio_chart(dates: list[datetime], worths: list[float],
-                    username: str, currency: str) -> io.BytesIO:
-    plt, mdates = _plt()
-    with plt.rc_context(_STYLE):
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(dates, worths, color="#5865f2", linewidth=2, marker="o", markersize=4)
-        ax.set_ylabel(f"Net worth ({currency})")
-        ax.set_title(f"{username} — net worth over time")
-        ax.grid(True, alpha=0.5)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-        fig.autofmt_xdate(rotation=0, ha="center")
-        return _render(plt, fig)
+                    username: str, currency: str) -> str:
+    dates, worths = _downsample(dates, worths)
+    labels = [d.strftime("%m/%d") for d in dates]
+    config = {
+        "type": "line",
+        "data": {"labels": labels, "datasets": [{
+            "label": f"Net worth ({currency})",
+            "data": [round(w) for w in worths],
+            "borderColor": "#5865f2", "backgroundColor": "rgba(88,101,242,0.15)",
+            "borderWidth": 2, "fill": True, "tension": 0.25, "pointRadius": 2,
+        }]},
+        "options": {
+            "plugins": {"legend": {"labels": {"color": _TICK}}},
+            "scales": _axes(currency),
+        },
+    }
+    return _url(config)

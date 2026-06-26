@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from db import connect
-from market import subsidy_to_b, SHARE_PAYOUT
+from market import subsidy_to_b
 from permissions import is_admin_or_owner
 
 
@@ -60,7 +60,8 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             f"- Referrals: {'on' if s['referral_enabled'] else 'off'} "
             f"(bonus `{s['referral_bonus']}`)\n"
             f"- Inflation: {infl}\n"
-            f"- Share payout (fixed): `{SHARE_PAYOUT} {s['currency_name']}` per winning share\n"
+            f"- Share payout: `{s['share_payout']} {s['currency_name']}` per winning share "
+            f"(new markets start at `{s['share_payout'] // 2}`)\n"
             f"- Open markets: `{open_n}`",
             ephemeral=True,
         )
@@ -149,6 +150,24 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
                if enabled else "Referrals **disabled**.")
         await interaction.response.send_message(msg, ephemeral=True)
 
+    @app_commands.command(name="share_payout", description="Set what a winning share pays (new markets).")
+    @app_commands.describe(amount="Credits a winning share pays; new markets start at half this")
+    @app_commands.guild_only()
+    async def share_payout(self, interaction: discord.Interaction,
+                           amount: app_commands.Range[int, 2, 1_000_000_000]):
+        if not await self._guard(interaction):
+            return
+        async with connect() as db:
+            await db.execute(
+                "UPDATE servers SET share_payout = ? WHERE guild_id = ?",
+                (amount, interaction.guild_id))
+            await db.commit()
+        await interaction.response.send_message(
+            f"Share payout set to `{amount}`. New markets will start at "
+            f"`{amount // 2}`/share (winning payout is always 2x the start). "
+            f"Existing markets keep their original payout.",
+            ephemeral=True)
+
     @app_commands.command(name="inflation", description="Set automatic credit inflation. Amount=0 disables it.")
     @app_commands.guild_only()
     async def inflation(self, interaction: discord.Interaction,
@@ -185,16 +204,17 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             return
         async with connect() as db:
             async with db.execute(
-                "SELECT initial_subsidy, currency_name FROM servers WHERE guild_id = ?",
-                (interaction.guild_id,),
+                "SELECT initial_subsidy, currency_name, share_payout FROM servers "
+                "WHERE guild_id = ?", (interaction.guild_id,),
             ) as cur:
                 srv = await cur.fetchone()
             sub = subsidy if subsidy is not None else srv["initial_subsidy"]
-            b = subsidy_to_b(sub)
+            payout = srv["share_payout"]
+            b = subsidy_to_b(sub, payout)
             cur = await db.execute(
-                "INSERT INTO markets (guild_id, question, status, liquidity, subsidy, created_at) "
-                "VALUES (?, ?, 'open', ?, ?, ?)",
-                (interaction.guild_id, question, b, sub,
+                "INSERT INTO markets (guild_id, question, status, liquidity, subsidy, "
+                "payout, created_at) VALUES (?, ?, 'open', ?, ?, ?, ?)",
+                (interaction.guild_id, question, b, sub, payout,
                  datetime.now(timezone.utc).isoformat()),
             )
             mid = cur.lastrowid
@@ -202,7 +222,8 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
         await interaction.response.send_message(
             f"Opened market `#{mid}`: {question}\n"
             f"Subsidy: **{sub} {srv['currency_name']}** — starting price "
-            f"**50 {srv['currency_name']}/share** on each side.",
+            f"**{payout // 2} {srv['currency_name']}/share**, winning shares pay "
+            f"**{payout}**.",
             ephemeral=True,
         )
 
@@ -243,7 +264,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
         now = datetime.now(timezone.utc).isoformat()
         async with connect() as db:
             async with db.execute(
-                "SELECT status FROM markets WHERE market_id = ? AND guild_id = ?",
+                "SELECT status, payout FROM markets WHERE market_id = ? AND guild_id = ?",
                 (market_id, interaction.guild_id),
             ) as cur:
                 row = await cur.fetchone()
@@ -253,6 +274,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             if row["status"] == "resolved":
                 await interaction.response.send_message("Market already resolved.", ephemeral=True)
                 return
+            share_payout = row["payout"]
             col = "yes_shares" if outcome == "yes" else "no_shares"
             async with db.execute(
                 f"SELECT user_id, {col} AS shares FROM positions "
@@ -263,7 +285,7 @@ class SettingsCog(commands.GroupCog, name="settings", description="Server admin 
             total_paid = 0
             paid_count = 0
             for w in winners:
-                payout = int(round(w["shares"] * SHARE_PAYOUT))
+                payout = int(round(w["shares"] * share_payout))
                 if payout <= 0:
                     continue
                 await db.execute(

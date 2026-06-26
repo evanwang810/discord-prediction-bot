@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS servers (
     tax_percent REAL NOT NULL DEFAULT 0,
     referral_enabled INTEGER NOT NULL DEFAULT 0,
     referral_bonus INTEGER NOT NULL DEFAULT 500,
+    share_payout INTEGER NOT NULL DEFAULT 100,
     created_at TEXT NOT NULL
 );
 
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS markets (
     outcome TEXT,
     liquidity REAL NOT NULL,
     subsidy INTEGER NOT NULL DEFAULT 0,
+    payout INTEGER NOT NULL DEFAULT 100,
     yes_shares REAL NOT NULL DEFAULT 0,
     no_shares REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
@@ -93,6 +95,8 @@ _ADDS = [
     ("servers", "tax_percent", "REAL NOT NULL DEFAULT 0"),
     ("servers", "referral_enabled", "INTEGER NOT NULL DEFAULT 0"),
     ("servers", "referral_bonus", "INTEGER NOT NULL DEFAULT 500"),
+    ("servers", "share_payout", "INTEGER NOT NULL DEFAULT 100"),
+    ("markets", "payout", "INTEGER NOT NULL DEFAULT 100"),
     ("accounts", "last_trade_at", "TEXT"),
     ("accounts", "referred_by", "INTEGER"),
     ("trades", "price_at_trade", "REAL"),
