@@ -15,6 +15,13 @@ A small Discord bot that runs binary (YES/NO) prediction markets inside a server
 - 10-minute trade cooldown per user
 - All admin actions gated by Discord's administrator permission
 
+## Add the bot to your server
+
+[**Invite link**](https://discord.com/oauth2/authorize?client_id=1513772682762649651&permissions=2147485696&integration_type=0&scope=bot)
+
+You'll need "Manage Server" permission on the target server. After inviting, an
+admin runs `/setup` once to initialize it.
+
 ## Stack
 
 Python 3.11+, [discord.py](https://github.com/Rapptz/discord.py) 2.x, SQLite via `aiosqlite`.
